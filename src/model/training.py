@@ -99,9 +99,9 @@ def extract_sales(df_orders: pd.DataFrame) -> pd.DataFrame:
     task_type=TaskTypes.data_processing,
 )
 def extract_features(
-    df_sales: pd.DataFrame,
-    features: Dict[str, Tuple[str, int, str, Optional[int]]],
-    targets: Dict[str, Tuple[str, int]],
+        df_sales: pd.DataFrame,
+        features: Dict[str, Tuple[str, int, str, Optional[int]]],
+        targets: Dict[str, Tuple[str, int]],
 ) -> pd.DataFrame:
     from features import add_features, add_targets
 
@@ -109,7 +109,8 @@ def extract_features(
 
     df_features = df_sales.copy()
 
-    ...
+    add_features(df_features, features)
+    add_targets(df_features, targets)
 
     df_features.sort_values(["sku_id", "day"], inplace=True)
 
@@ -124,15 +125,15 @@ def extract_features(
     task_type=TaskTypes.data_processing,
 )
 def split_train_test(
-    df_features: pd.DataFrame,
-    test_days: int,
+        df_features: pd.DataFrame,
+        test_days: int,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     import pandas as pd  # noqa
     from model import split_train_test
 
     print("Splitting train and test data...")
 
-    ...
+    df_train, df_test = split_train_test(df_features, test_days)
 
     print("Train and test data splitted.")
 
@@ -145,16 +146,17 @@ def split_train_test(
     task_type=TaskTypes.training,
 )
 def fit_model(
-    df_features: pd.DataFrame,
-    features: List[str],
-    quantiles: List[float],
-    horizons: List[int],
+        df_features: pd.DataFrame,
+        features: List[str],
+        quantiles: List[float],
+        horizons: List[int],
 ) -> MultiTargetModel:
     from model import MultiTargetModel
 
     print("Training production model...")
 
-    ...
+    model = MultiTargetModel(features, horizons, quantiles)
+    model.fit(df_features)
 
     print("Production model trained.")
 
@@ -167,16 +169,17 @@ def fit_model(
     task_type=TaskTypes.training,
 )
 def fit_eval_model(
-    df_train: pd.DataFrame,
-    features: List[str],
-    quantiles: List[float],
-    horizons: List[int],
+        df_train: pd.DataFrame,
+        features: List[str],
+        quantiles: List[float],
+        horizons: List[int],
 ) -> MultiTargetModel:
     from model import MultiTargetModel
 
     print("Training evaluation model...")
 
-    ...
+    model = MultiTargetModel(features, horizons, quantiles)
+    model.fit(df_train)
 
     print("Evaluation model trained.")
 
@@ -188,43 +191,42 @@ def fit_eval_model(
     task_type=TaskTypes.qc,
 )
 def evaluate(
-    eval_model: MultiTargetModel,
-    df_test: pd.DataFrame,
-    quantiles: List[float],
-    horizons: List[int],
+        eval_model: MultiTargetModel,
+        df_test: pd.DataFrame,
+        quantiles: List[float],
+        horizons: List[int],
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     from evaluate import evaluate_model
 
     print("Evaluating model...")
 
-    ...
+    df_pred = eval_model.predict(df_test)
+    losses = evaluate_model(df_test, df_pred, quantiles, horizons)
 
     print("Model evaluated.")
 
-    return losses
+    return losses, df_pred
 
 
 @PipelineDecorator.component(
     task_type=TaskTypes.custom,
 )
 def deploy_model(
-    model: MultiTargetModel,
-    model_path: str,
-    losses: pd.DataFrame,
-    df_pred: pd.DataFrame,
+        model: MultiTargetModel,
+        model_path: str,
+        losses: pd.DataFrame,
+        df_pred: pd.DataFrame,
 ) -> None:
     import pickle
-    from evaluate import test_losses
 
     print("Check model quality...")
 
     print(f"Losses: {losses}")
 
-    ...
-
     print("Quality checked. Saving production model...")
 
-    ...
+    with open(model_path, "wb") as f:
+        pickle.dump(model, f)
 
     print("Production model saved!")
 
@@ -235,31 +237,37 @@ def deploy_model(
     version="1.0.0",
 )
 def run_pipeline(
-    orders_url: str,
-    test_days: int,
-    model_path: str,
-    features: Dict[str, Tuple[str, int, str, Optional[int]]],
-    targets: Dict[str, Tuple[str, int]],
-    quantiles: List[float],
-    horizons: List[int],
+        orders_url: str,
+        test_days: int,
+        model_path: str,
+        features: Dict[str, Tuple[str, int, str, Optional[int]]],
+        targets: Dict[str, Tuple[str, int]],
+        quantiles: List[float],
+        horizons: List[int],
 ) -> None:
     orders_df = fetch_orders(orders_url)
 
     df_sales = extract_sales(orders_df)
 
-    df_features = ...
+    df_features = extract_features(df_sales, features, targets)
 
     model_features = ["price", "qty"] + list(features.keys())
 
-    ... = fit_model(df_features, model_features, quantiles, horizons)
+    df_train, df_test = split_train_test(df_features, test_days)
 
-    ...
+    model = fit_model(df_features, model_features, quantiles, horizons)
+
+    eval_model = fit_eval_model(df_train, features, quantiles, horizons)
+
+    losses, df_pred = evaluate(eval_model, df_test, quantiles, horizons)
+
+    deploy_model(model, model_path, losses, df_pred)
 
 
 def main(
-    orders_url: str = "https://disk.yandex.ru/d/NUDMAdBMe9sbLw",
-    model_path: str = "model.pkl",
-    debug: bool = False,
+        orders_url: str = "https://disk.yandex.ru/d/NUDMAdBMe9sbLw",
+        model_path: str = "models/model.pkl",
+        debug: bool = False,
 ) -> None:
     """Main function
 

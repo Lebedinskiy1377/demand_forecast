@@ -74,8 +74,17 @@ def add_targets(df: pd.DataFrame, targets: Dict[str, Tuple[str, int]]) -> None:
             - days: number of next days to include into rolling window
             (current date is always excluded from the rolling window)
     """
-
+    for target_name, (agg_col, days) in targets.items():
+        df[target_name] = (
+            df.iloc[::-1]
+            .groupby(by=df["sku_id"])[agg_col]
+            .shift(1)
+            .groupby(by=df["sku_id"])
+            .rolling(window=days)
+            .sum()
+            .reset_index(level=0, drop=True)
+        )
 
 
 if __name__ == "__main__":
-    df = pd.read_csv("data/qty.csv")
+    df = pd.read_csv("../../data/qty.csv")
