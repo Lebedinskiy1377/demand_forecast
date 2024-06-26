@@ -95,9 +95,10 @@ class MultiTargetModel:
 
         def fit_sku(sku_id):
             data_sku = data[data[self.sku_col] == sku_id]
+            X = data_sku[self.features]
+
             models_for_cur_sku = {}
             for horizon in self.horizons:
-                X = data_sku[self.features]
                 y = data_sku[f"next_{horizon}d"]
                 for q in self.quantiles:
                     quant_reg = QuantileRegressor(quantile=q, alpha=0, solver=solver)
