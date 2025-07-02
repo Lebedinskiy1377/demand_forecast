@@ -1,126 +1,103 @@
-Demand Forecast
-A Python library for SKU-level demand forecasting using quantile regression, designed for optimizing inventory management and supply chain planning. The project implements an end-to-end pipeline for data preprocessing, feature engineering, model training, evaluation, and deployment.
-Features
+# 📈 Demand Forecasting System for Retail (Quantile Regression + ClearML)
 
-Data Preprocessing: Extracts sales data from orders and constructs a daily SKU-level dataset.
-Feature Engineering: Generates rolling window features (e.g., average and quantile-based) and target variables for multiple forecast horizons (7, 14, 21 days).
-Quantile Regression: Uses QuantileRegressor from scikit-learn to predict demand at different quantiles (0.1, 0.5, 0.9) for robust forecasting.
-Evaluation Metrics: Computes quantile loss to assess model performance across multiple horizons.
-Missed Profits Analysis: Calculates weekly missed profits and confidence intervals to evaluate the financial impact of forecasting errors.
-Automated Pipeline: Orchestrates the entire workflow using ClearML for data processing, training, and deployment.
+This project implements a **multi-horizon, multi-quantile demand forecasting pipeline** for retail sales using `QuantileRegressor`.  
+It includes **automated feature generation**, **ClearML pipelines**, **quantile-based evaluation**, and a **business-focused metric: missed profits**.
 
-Tech Stack
+---
 
-Python 3.9+
-pandas
-numpy
-scikit-learn
-clearml
-requests
-joblib
-tqdm
-fire
+## Problem Statement
 
-Installation
+Forecast demand for each SKU for the next 7, 14, and 21 days using past sales history.  
+Key goals:
+- Quantify uncertainty (quantile regression)
+- Generate interpretable features
+- Evaluate using business-impact metrics (missed profits)
 
-Clone the repository:git clone https://github.com/Lebedinskiy1377/demand_forecast.git
-cd demand_forecast
+---
 
+## Key Features
 
-Install dependencies:pip install -r requirements.txt
+✅ Fully automated ML pipeline (using `ClearML`)  
+✅ Custom quantile loss + bootstrap confidence intervals  
+✅ Rolling feature generation (quantile, average)  
+✅ Per-SKU models trained in parallel  
+✅ Business metric: **missed profit** estimation  
+✅ Modular codebase, easy to extend or adapt
 
+---
 
-(Optional) Set up ClearML for pipeline orchestration:
-Install ClearML: pip install clearml
-Configure ClearML credentials (see ClearML documentation).
+## Pipeline Overview
 
+Raw orders (.csv or Yandex.Disk) → Feature engineering → Targets → Train/Test split →  
+Per-SKU QuantileRegressor training → Predictions → Evaluation (quantile loss, missed profits) → Model saved
 
+```python
+features = {
+    "qty_7d_avg": ("qty", 7, "avg", None),
+    "qty_14d_q50": ("qty", 14, "quantile", 50),
+    ...
+}
 
-Usage
-Running the Pipeline
-The pipeline processes data, trains a model, evaluates it, and saves the model for production use. Run the main script with default parameters:
-python src/model/training.py --orders_url https://disk.yandex.ru/d/NUDMAdBMe9sbLw --model_path models/model.pkl
+targets = {
+    "next_7d": ("qty", 7),
+    "next_14d": ("qty", 14),
+    "next_21d": ("qty", 21),
+}
+```
 
-Example Workflow
+## Project Structure
 
-Prepare Data:
-
-Download orders data from a provided URL (e.g., Yandex Disk).
-Extract daily sales data and generate features (e.g., rolling averages and quantiles) and targets (e.g., demand for the next 7, 14, 21 days).
-
-
-Train and Evaluate Model:
-
-
-from src.model.training import main
-
-# Run the pipeline
-main(
-    orders_url="https://disk.yandex.ru/d/NUDMAdBMe9sbLw",
-    model_path="models/model.pkl",
-    debug=True  # Run in debug mode for faster execution
-)
-
-
-Evaluate Missed Profits:
-
-from src.model.missed_profits import week_missed_profits, missed_profits_ci
-import pandas as pd
-
-# Load predictions and actuals
-df = pd.read_csv("data/pred.csv")
-
-# Calculate weekly missed profits
-result = week_missed_profits(df, sales_col="qty", forecast_col="pred_7d_q50")
-print(result)
-
-# Estimate confidence intervals
-ci = missed_profits_ci(result, missed_profits_col="missed_profits")
-print(ci)
-
-Example Input Data
-The input data should be a CSV file with columns timestamp, sku_id, sku, price, and qty.
-Example (data/orders.csv):
-timestamp,sku_id,sku,price,qty
-2023-01-01,1,ItemA,626.66,1
-2023-01-01,2,ItemB,1016.57,1
-2023-01-02,1,ItemA,626.66,3
-
-Example Output
-
-Predictions (data/pred.csv):
-
-sku_id,day,pred_7d_q10,pred_7d_q50,pred_7d_q90,pred_14d_q10,pred_14d_q50,pred_14d_q90,pred_21d_q10,pred_21d_q50,pred_21d_q90
-1,2023-12-01,2.1,3.5,5.2,4.0,6.5,8.9,6.2,9.0,12.3
-2,2023-12-01,1.8,3.0,4.7,3.5,5.8,7.9,5.0,7.5,10.1
-
-
-Missed Profits:
-
-day,revenue,missed_profits
-2023-12-03,1253.32,187.99
-2023-12-10,1987.65,245.32
-
-Project Structure
-├── data/               # Datasets (e.g., orders.csv, features.csv, pred.csv)
-├── models/             # Trained models (e.g., model.pkl)
-├── src/                # Source code
+├── src/
 │   ├── model/
-│   │   ├── evaluate.py       # Quantile loss evaluation
-│   │   ├── features.py       # Feature and target generation
-│   │   ├── model.py          # Quantile regression model and train-test split
-│   │   ├── training.py       # Pipeline for data processing, training, and deployment
-│   │   ├── missed_profits.py # Missed profits calculation and confidence intervals
-├── requirements.txt    # Project dependencies
-└── README.md           # Project documentation
+│   │   ├── model.py         # QuantileRegressor logic + training
+│   │   ├── features.py      # Rolling feature & target generation
+│   │   ├── evaluate.py      # Quantile loss evaluation
+│   │   └── training.py      # ClearML pipeline components
+│
+├── test/
+│   └── missed_profit.py     # Business metric: missed profit + CI
+├── data/                    # Input/output data
+├── models/                  # Trained models
+├── README.md                # You’re here
 
-Requirements
-Install dependencies using:
-pip install pandas numpy scikit-learn clearml requests joblib tqdm fire
+## Evaluation Example
 
-Notes
+```python
+from evaluate import evaluate_model
 
-The pipeline uses ClearML for task orchestration. In debug mode (--debug True), it runs locally without creating ClearML tasks for faster execution.
-The model predicts demand for new SKUs as zero, as specified in model.py.
-Feature engineering includes rolling window statistics (mean and quantiles) for 7, 14, and 21 days, which can be customized in training.py.
-The project is designed for retail demand forecasting but can be adapted for other time-series forecasting tasks.
+losses = evaluate_model(df_test, df_pred, quantiles=[0.1, 0.5, 0.9], horizons=[7, 14, 21])
+print(losses)
+```
+
+## Business Metric: Missed Profits
+
+`test/missed_profit.py` includes:
+
+- Weekly missed revenue due to underforecasting
+    
+- Confidence intervals via bootstrapping
+    
+- Relative loss (% of total revenue)
+
+## Tech Stack
+
+- 🧠 `sklearn.linear_model.QuantileRegressor`
+    
+- ⚡ `joblib` for parallel model training
+    
+- 📈 `ClearML` for orchestrating training pipeline
+    
+- 📊 `Pandas`, `NumPy`, `TQDM`, `Fire`
+    
+- 📦 Lightweight, no deep learning dependencies
+
+## Launch Pipeline (Yandex.Disk Example)
+
+```bash
+python training.py --debug=False
+```
+
+## Author
+
+Dmitry Lebedinskiy (2024)  
+Developed as part of demand forecasting R&D track for retail ML systems.
